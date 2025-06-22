@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Janniks Kopfspiel</title>
+    <style>
+        /* HARD RESET für Konsistenz */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            width: 100vw;
+            height: 100vh; /* Standard für die meisten Fälle */
+            /* Zusätzliche Browser-spezifische Anpassungen für die Höhe */
+            height: -webkit-fill-available; /* Für mobile Safari */
+            height: fill-available; /* Standard (noch nicht überall unterstützt) */
+            
+            min-height: 380px; /* Minimale Höhe des gesamten Dokuments */
+            display: flex;
+            background-color: #333;
+            color: white;
+            overflow: hidden; /* Haupt-Overflow auf Body Ebene bleibt hidden */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            flex-direction: column; /* Body als Flex-Container für game-container und copyright */
+            align-items: center; /* Zentriert den Inhalt horizontal */
+            padding: 5px; /* Ein kleiner Puffer am Rand des Viewports */
+            /* Explizite Margins/Paddings zur Überschreibung von Browser-Defaults */
+            margin: 0; 
+            padding: 5px; 
+        }
+
+        .game-container {
+            border: 2px solid white;
+            position: relative;
+            width: 100%;
+            /* Wichtig: Höhe berechnet sich aus Viewport minus Body-Padding (oben+unten) und Copyright-Margin */
+            height: calc(100vh - (5px + 5px + 5px)); /* 5px body-padding-top + 5px body-padding-bottom + 5px copyright-margin-top */
+            
+            flex-grow: 1; /* Nimmt so viel Platz wie möglich ein */
+            flex-shrink: 1; /* Erlaubt dem Container, kleiner zu werden */
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            background-color: #333;
+            align-items: center;
+            overflow-y: hidden; /* Wichtig: Kein Scrollen auf dem game-container selbst */
+            overflow-x: hidden;
+        }
+
+        .stats-top-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+            max-width: 500px;
+            flex-shrink: 0; /* Sollte nicht schrumpfen */
+            z-index: 50;
+            padding-bottom: 5px;
+            padding-top: 5px;
+            box-sizing: border-box;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-label {
+            width: 60px;
+            flex-shrink: 0;
+            font-size: 0.7em;
+            text-align: right;
+            padding-right: 5px;
+        }
+
+        .stat-icon {
+            font-size: 1.2em;
+            flex-shrink: 0;
+        }
+
+        .scale-container {
+            flex-grow: 1;
+            height: 7px;
+            background-color: #555;
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .scale-fill {
+            height: 100%;
+            background-color: limegreen;
+            width: 50%;
+            transition: width 0.3s ease-in-out, background-color 0.3s ease-in-out;
+            position: absolute;
+            left: 0;
+        }
+
+        .scale-fill.negative {
+            background-color: salmon;
+        }
+
+        .scale-fill.zero {
+            background-color: white;
+        }
+
+        .scale-center-line {
+            position: absolute;
+            height: 100%;
+            width: 1px;
+            background-color: white;
+            left: 33.333%;
+            transform: translateX(-50%);
+            z-index: 1;
+        }
+
+        .head-section {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1; /* Wächst, um den verbleibenden Platz zu füllen */
+            flex-shrink: 1; /* Erlaubt dem Kopf, zu schrumpfen */
+            flex-basis: auto; /* Nimmt die natürliche Größe, aber erlaubt Schrumpfen/Wachsen */
+            min-height: 180px; /* Mindesthöhe für den Kopfbereich */
+            z-index: 15;
+            padding: 5px;
+            box-sizing: border-box;
+            border-radius: 10px;
+            position: relative;
+            overflow-y: auto; /* Scrollbar für den Kopf, falls der Platz nicht reicht */
+        }
+
+        .head {
+            font-size: 24em; /* Diese Größe wird jetzt vom Bild ignoriert, aber für die Containergröße relevant */
+            text-align: center;
+            cursor: default;
+            line-height: 1;
+            flex-shrink: 0; /* Verhindert, dass der Kopf selbst schrumpft */
+            padding: 5px;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            box-sizing: border-box;
+            z-index: 10;
+            margin-top: 0;
+            transition: opacity 0.3s ease-in-out; /* Standard-Transition */
+            
+            /* Stil für das Bild im Kopf-Container */
+            display: flex; /* Flexbox für Zentrierung des Bildes */
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .head img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain; /* Stellt sicher, dass das Bild vollständig sichtbar ist */
+            display: block; /* Entfernt zusätzlichen Platz unter dem Bild */
+        }
+
+        .head.hidden {
+            opacity: 0;
+            pointer-events: none; /* Macht den Kopf unklickbar, wenn ausgeblendet */
+        }
+
+        .head.drag-over {
+            border-color: limegreen;
+            background-color: rgba(0, 255, 0, 0.1);
+        }
+
+        .speech-bubble {
+            position: absolute;
+            background-color: white;
+            color: black;
+            border: 1px solid black;
+            border-radius: 18px;
+            font-size: 1.2em; /* KLEINER GEMACHT */
+            font-weight: bold;
+            white-space: nowrap;
+            opacity: 0; /* Standardmäßig unsichtbar */
+            transition: opacity 0.1s ease-in-out; /* Standard-Transition */
+            pointer-events: none; /* Standardmäßig nicht klickbar */
+            z-index: 20;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 0px;
+            margin-bottom: 10px;
+            padding: 8px 20px; /* KLEINER GEMACHT */
+            display: block; /* WICHTIG: Immer 'block', Sichtbarkeit nur über Opacity/Pointer-Events */
+        }
+
+        .speech-bubble.active {
+            opacity: 1;
+            pointer-events: auto; /* Aktiv und klickbar, wenn sichtbar */
+        }
+
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 18px solid transparent;
+            border-right: 18px solid transparent;
+            border-bottom: 18px solid black;
+            border-top: none;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 21;
+        }
+        .speech-bubble::before {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 17px solid transparent;
+            border-right: 17px solid transparent;
+            border-bottom: 17px solid white;
+            border-top: none;
+            bottom: calc(100% - 1px);
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 21;
+        }
+
+        .item.is-dragging {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        .ghost-item {
+            opacity: 0.9;
+            transform: scale(3);
+            box-shadow: none;
+            pointer-events: none;
+            transition: none;
+            will-change: transform;
+            font-size: inherit;
+        }
+
+        .item-rows-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 20px 4vw;
+            width: 100%;
+            height: auto; /* Wichtig: Höhe passt sich dem Inhalt an */
+            min-height: 100px; /* Mindesthöhe für die Icons/Buttons */
+            max-width: 700px;
+            box-sizing: border-box;
+            padding: 0 5px 5px; /* Unten 5px Padding hinzugefügt */
+            justify-items: center;
+            align-items: center;
+            position: relative;
+            margin-top: auto; /* Schiebt Container nach unten im Flex-Parent */
+            flex-shrink: 0; /* Verhindert, dass es in kleinen Bildschirmen zu viel Platz wegnimmt */
+        }
+
+        /* Positionen für die untere Reihe im Grid */
+        #donate-button {
+            grid-column: 1 / span 1; /* Erste Spalte: Links von Medizin-Symbolen */
+            grid-row: 3 / span 1;    /* Dritte Reihe */
+            font-size: 1.5vw;        /* Schriftgröße wie Reset-Button */
+            max-font-size: 20px;
+            min-width: 60px;         /* Mindestbreite */
+            white-space: nowrap;     /* Bleibt einzeilig */
+        }
+        #item-test {
+            grid-column: 2 / span 1; /* Zweite Spalte */
+            grid-row: 3 / span 1;    /* Dritte Reihe */
+        }
+        #item-medicine {
+            grid-column: 3 / span 1; /* Dritte Spalte */
+            grid-row: 3 / span 1;    /* Dritte Reihe */
+        }
+        #item-reset-button {
+            grid-column: 4 / span 1; /* Vierte Spalte: Rechts von Medizin-Symbolen */
+            grid-row: 3 / span 1;
+            font-size: 1.5vw;
+            max-font-size: 20px;
+            min-width: 60px;
+            /* white-space: normal; (default), damit <br> funktioniert */
+        }
+
+        /* Allgemeine Buttons (game-button) */
+        .game-button {
+            background-color: transparent;
+            color: white;
+            padding: 5px 10px;
+            font-size: 1.5vw;
+            max-font-size: 20px;
+            min-width: 80px; /* Standardbreite, kann von spezifischen IDs überschrieben werden */
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.1s ease-out, transform 0.1s ease-out;
+            pointer-events: all;
+            touch-action: manipulation;
+            font-weight: bold;
+            line-height: 1.2; /* Ermöglicht zweizeiligen Text (z.B. NEU START) */
+            text-decoration: none;
+            /* white-space: nowrap; wurde hier entfernt, ist nur noch spezifisch für #donate-button */
+            outline: none; /* Entfernt den Fokus-Rahmen */
+        }
+
+        .game-button:hover {
+            background-color: rgba(40, 167, 69, 0.2);
+        }
+        .game-button:active {
+            background-color: #ff0000 !important;
+            transform: scale(0.98);
+        }
+
+        .item {
+            width: auto;
+            font-size: 8vw;
+            max-font-size: 60px;
+            line-height: 1;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            padding: 1px;
+            border: none; /* Explizit keinen Border */
+            outline: none; /* Explizit keinen Outline */
+            background-color: transparent;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-sizing: border-box;
+            opacity: 1;
+            transition: opacity 0.1s ease-in-out;
+            touch-action: none;
+            -ms-touch-action: none;
+        }
+
+        .item:focus {
+            outline: none; /* Auch bei Fokus sicherstellen, dass kein Outline erscheint */
+            border: none;
+        }
+        .item:active {
+            outline: none; /* Auch bei Klick/Tap sicherstellen, dass kein Outline erscheint */
+            border: none;
+        }
+
+        .item.disabled {
+            opacity: 0.15 !important;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* NEUE SCREEN-POSITIONIERUNG MIT JS - Nur noch der Smiley */
+        .screen {
+            position: absolute; /* Wichtig für JS-Positionierung relativ zum Viewport */
+            background-color: transparent; /* KEIN HINTERGRUND */
+            border: none; /* KEIN RAHMEN */
+            display: flex;
+            flex-direction: column; /* Immer noch column, auch wenn nur ein Element */
+            justify-content: center; /* Smiley vertikal zentrieren */
+            align-items: center; /* Smiley horizontal zentrieren */
+            text-align: center;
+            display: none;
+            z-index: 100;
+            padding: 0; /* Kein Padding, da keine Box mehr */
+            box-sizing: border-box;
+            pointer-events: none; /* Smileys sollen nicht klickbar sein, Text ist separat */
+            transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out, left 0.3s ease-in-out, width 0.3s ease-in-out, height 0.3s ease-in-out;
+            opacity: 0;
+        }
+
+        .screen.active {
+            display: flex;
+            opacity: 1;
+            pointer-events: auto; /* Erlaubt Klicks (falls mal nötig) */
+        }
+        
+        /* Das Bild im Screen muss sich ebenfalls anpassen können */
+        .screen img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+
+        .screen-emoji {
+            font-size: inherit; /* Nimmt die font-size vom Parent (.screen) */
+            line-height: 1;
+            margin: 0;
+            flex-grow: 0;
+            display: inline-block;
+        }
+        
+        /* NEU: Separates Textelement */
+        .text-screen {
+            position: absolute;
+            background-color: transparent; /* KEIN HINTERGRUND */
+            color: white; /* DEFINIERTE FARBE (Standard) */
+            font-weight: bold;
+            text-align: center;
+            white-space: nowrap; /* Text in einer Zeile halten */
+            overflow: hidden; /* Überlaufenden Text ausblenden */
+            text-overflow: ellipsis; /* Drei Punkte anzeigen, wenn Text überläuft */
+            z-index: 101; /* Über dem Smiley und Spielinhalt */
+            display: none; /* Standardmäßig ausgeblendet */
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, top 0.3s ease-in-out;
+            pointer-events: none; /* Soll nicht auf Interaktion reagieren */
+            padding: 2px 5px; /* Kleines Padding, falls Text mal Rand berührt */
+            box-sizing: border-box; /* Padding in die Breite einrechnen */
+        }
+
+        .text-screen.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* Spezifische Textfarben für Bildschirme */
+        .text-screen.winner2 {
+            color: #FFA500; /* Orange-Gelb */
+        }
+        .text-screen.gameover1 {
+            color: #39FF14; /* Giftgrün */
+        }
+
+
+        .copyright {
+            font-size: 0.5em;
+            color: #ccc;
+            text-align: center;
+            width: 100%;
+            z-index: 9999;
+            margin-top: 5px; /* Abstand zum Game-Container */
+            margin-bottom: 0px; /* Abstand zum unteren Rand des Viewport */
+            flex-shrink: 0; /* Verhindert, dass es in kleinen Bildschirmen zu viel Platz wegnimmt */
+        }
+
+        /* Responsive Design */
+        /* Die screen-Positionierung wird durch JS dynamisch gemacht, daher keine festen media queries für .screen top/left/width/height mehr. */
+
+        /* Standard Desktop (über 993px) */
+        @media (min-width: 993px) {
+            .head { /* font-size wird für Bild ignoriert, aber für Container relevant */ }
+            .speech-bubble {
+                margin-bottom: 90px; /* Angepasst */
+            }
+            .item-rows-container { gap: 20px 40px; max-width: 700px; min-height: 150px; }
+            .item { font-size: 60px; max-font-size: 60px; }
+            .game-button { font-size: 18px; }
+        }
+
+        /* Laptop/Kleinere Desktops (unter 992px) */
+        @media (max-width: 992px) {
+            .head { /* font-size wird für Bild ignoriert, aber für Container relevant */ }
+            .speech-bubble {
+                margin-bottom: 75px; /* Angepasst */
+            }
+            .item-rows-container { gap: 15px 4vw; max-width: 600px; min-height: 140px; }
+            .item { font-size: 7vw; max-font-size: 55px; }
+            .game-button { font-size: 1.8vw; max-font-size: 18px; }
+        }
+
+        /* Tablet (under 768px) */
+        @media (max-width: 768px) {
+            .head { /* font-size wird für Bild ignoriert, aber für Container relevant */ }
+            .speech-bubble {
+                margin-bottom: 60px; /* Angepasst */
+            }
+            .item-rows-container { gap: 10px 5vw; max-width: 500px; min-height: 130px; }
+            .item { font-size: 8vw; max-font-size: 50px; }
+            .stats-top-section { max-width: 400px;}
+            .stat-label { width: 55px; font-size: 0.65em; }
+            .stat-icon { font-size: 1em; }
+            .scale-container { height: 6px; }
+            .game-button { font-size: 2.5vw; max-font-size: 16px; }
+        }
+
+        /* Mobile (unter 480px) */
+        @media (max-width: 480px) {
+            .head { /* font-size wird für Bild ignoriert, aber für Container relevant */ }
+            .speech-bubble {
+                margin-bottom: 50px; /* Angepasst */
+            }
+            .item-rows-container { gap: 8px 6vw; max-width: 400px; min-height: 120px; }
+            .item { font-size: 9vw; max-font-size: 45px; }
+            .stats-top-section { max-width: 300px;}
+            .stat-label { width: 50px; font-size: 0.6em; }
+            .stat-icon { font-size: 0.9em; }
+            .scale-container { height: 5px; }
+            .game-button { font-size: 3vw; max-font-size: 14px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="stats-top-section">
+            <div class="stat">
+                <span class="stat-label">HERZHAFT</span>
+                <span class="stat-icon">🍗</span>
+                <div class="scale-container">
+                    <div class="scale-fill" id="herzhaft-fill"></div>
+                    <div class="scale-center-line"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <span class="stat-label">SÜSSES</span>
+                <span class="stat-icon">🍰</span>
+                <div class="scale-container">
+                    <div class="scale-fill" id="suesses-fill"></div>
+                    <div class="scale-center-line"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <span class="stat-label">VITAMINE</span>
+                <span class="stat-icon">🍎</span>
+                <div class="scale-container">
+                    <div class="scale-fill" id="vitamine-fill"></div>
+                    <div class="scale-center-line"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <span class="stat-label">TRINKEN</span>
+                <span class="stat-icon">🥛</span>
+                <div class="scale-container">
+                    <div class="scale-fill" id="trinken-fill"></div>
+                    <div class="scale-center-line"></div>
+                </div>
+            </div>
+            <div class="stat">
+                <span class="stat-label">MEDIZIN</span>
+                <span class="stat-icon">🩺</span>
+                <div class="scale-container">
+                    <div class="scale-fill" id="medizin-fill"></div>
+                    <div class="scale-center-line"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="head-section" id="head-section">
+            <div class="head" id="head-target">
+                <img src="KOPF.png" alt="Janniks Kopf" />
+            </div>
+            <div class="speech-bubble" id="jannik-speech-bubble">Ich bin der Jannik</div>
+        </div>
+
+        <div class="item-rows-container" id="item-rows-container">
+            <div class="item" draggable="true" data-type="food" data-effect='{"herzhaft": 1}'>🍕</div>
+            <div class="item" draggable="true" data-type="sweet" data-effect='{"suesses": -1}'>🍭</div>
+            <div class="item" draggable="true" data-type="vitamin" data-effect='{"vitamine": 1}'>🍓</div>
+            <div class="item" draggable="true" data-type="drink" data-effect='{"trinken": 1}'>🍺</div>
+            <div class="item" draggable="true" data-type="food" data-effect='{"herzhaft": -1}'>🧀</div>
+            <div class="item" draggable="true" data-type="sweet" data-effect='{"suesses": 1}'>🍩</div>
+            <div class="item" draggable="true" data-type="vitamin" data-effect='{"vitamine": -1}'>🍍</div>
+            <div class="item" draggable="true" data-type="drink" data-effect='{"trinken": -1}'>🧃</div>
+            <a id="donate-button" class="game-button" href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=jq.hartwig@gmx.de&item_name=Spende+JQ+GAMES&amount=0.50&currency_code=EUR&no_shipping=1&no_note=1&lc=de_DE" target="_blank" rel="noopener noreferrer">
+                SPENDE
+            </a>
+            <div class="item" draggable="true" data-type="special" data-effect='{"gameover": 1}' id="item-test">🧪</div>
+            <div class="item" draggable="true" data-type="medicine" data-effect='{"medizin": 1}' id="item-medicine">💊</div>
+            <button id="item-reset-button" class="game-button" onclick="resetGame();">NEU<br>START</button>
+        </div>
+    </div>
+
+    <div class="copyright">Copyright 2025 JQ GAMES</div>
+
+    <div id="gameOver1" class="screen"><img src="GO1.png" alt="Jannik Game Over 1" class="screen-emoji"></div>
+    <div id="gameOver2" class="screen"><img src="GO2.png" alt="Jannik Game Over 2" class="screen-emoji"></div>
+    <div id="winner1" class="screen"><img src="SB2.png" alt="Jannik Winner 1" class="screen-emoji"></div>
+    <div id="winner2" class="screen"><img src="SB1.png" alt="Jannik Winner 2" class="screen-emoji"></div>
+
+    <div id="screen-text" class="text-screen"></div>
+
+    <script>
+        let resetGame; // Dies muss global bleiben, da es im HTML aufgerufen wird
+        let originalHeadTransition = '';
+        let originalBubbleTransition = '';
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const initialScales = {
+                herzhaft: 0,
+                suesses: 0,
+                vitamine: 0,
+                trinken: 0,
+                medizin: 0
+            };
+
+            let scales = { ...initialScales };
+            let drinkCombo = 0;
+            let medizinActivated = false;
+            let medizinCombo = 0;
+            let lastActivatedItemType = '';
+
+            const minScale = -5;
+            const maxScale = 10;
+            const triggerScale = -3;
+
+            const bubbleDuration = 500; // Sprechblasen dauer auf 0.5 Sekunden reduziert
+            const screenActiveBubbleDelay = 2000; // 2 Sekunden Verzögerung für Sprechblase nach Screen-Aktivierung
+
+            const gameContainer = document.querySelector('.game-container');
+            const headSection = document.getElementById('head-section');
+            const headTarget = document.getElementById('head-target');
+            const headImage = headTarget.querySelector('img'); // Referenz auf das Bild im Kopf
+            const itemRowsContainer = document.getElementById('item-rows-container');
+            const statsTopSection = document.querySelector('.stats-top-section');
+            const copyrightElement = document.querySelector('.copyright');
+            const items = document.querySelectorAll('.item');
+            const testItem = document.getElementById('item-test');
+            const medicineItem = document.getElementById('item-medicine');
+            const screens = document.querySelectorAll('.screen');
+            const jannikSpeechBubble = document.getElementById('jannik-speech-bubble');
+            const body = document.body;
+            const screenTextElement = document.getElementById('screen-text');
+
+            let speechBubbleTimeoutId = null;
+            let bubbleResetTimeoutId = null; // Neuer Timeout für die Sprechblasen-Rücksetzung
+
+            items.forEach((item, index) => {
+                if (!item.id) {
+                    item.id = 'item-' + index;
+                }
+            });
+
+            // Original-Transitions beim Laden speichern
+            originalHeadTransition = window.getComputedStyle(headTarget).transition;
+            originalBubbleTransition = window.getComputedStyle(jannikSpeechBubble).transition;
+
+
+            // Funktion zur Anpassung der head-section Höhe, falls notwendig (z.B. bei sehr kleinen Bildschirmen)
+            function adjustHeadSectionHeight() {
+                const gameContainerHeight = gameContainer.clientHeight;
+                const statsHeight = statsTopSection.offsetHeight;
+                const itemRowsHeight = itemRowsContainer.offsetHeight;
+
+                const minimumRequiredHeight = statsHeight + itemRowsHeight + parseInt(window.getComputedStyle(headSection).minHeight);
+
+                if (minimumRequiredHeight > gameContainerHeight) {
+                    const availableForHead = gameContainerHeight - statsHeight - itemRowsHeight;
+                    headSection.style.maxHeight = `${Math.max(0, availableForHead)}px`;
+                    headSection.style.overflowY = 'auto'; // Erzwinge Scrollbar, wenn zu klein
+                } else {
+                    headSection.style.maxHeight = ''; // Max-Height entfernen, wenn genug Platz
+                    headSection.style.overflowY = 'hidden'; // Keine Scrollbar nötig
+                }
+            }
+
+            // Die eigentliche resetGame-Funktion (intern)
+            resetGame = function() {
+                scales = { ...initialScales };
+                drinkCombo = 0;
+                medizinActivated = false;
+                medizinCombo = 0;
+                lastActivatedItemType = '';
+                scales['gameoverTrigger'] = false;
+
+                screens.forEach(screen => {
+                    screen.classList.remove('active');
+                    screen.style.top = '';
+                    screen.style.left = '';
+                    screen.style.width = '';
+                    screen.style.height = '';
+                });
+                screenTextElement.classList.remove('active', 'winner2', 'gameover1');
+                screenTextElement.textContent = '';
+
+                body.classList.remove('screen-active');
+
+                headTarget.style.transition = 'none';
+                headTarget.offsetHeight;
+                headTarget.classList.remove('hidden');
+                setTimeout(() => {
+                    headTarget.style.transition = originalHeadTransition;
+                }, 0);
+
+                items.forEach(item => {
+                    item.classList.remove('disabled');
+                });
+
+                testItem.classList.add('disabled');
+                medicineItem.classList.add('disabled');
+
+                updateScaleDisplay();
+                checkGameConditions();
+                addGameEventListeners();
+                
+                // Beim Reset auch alle Sprechblasen-Timeouts löschen und Zustand zurücksetzen
+                if (speechBubbleTimeoutId) {
+                    clearTimeout(speechBubbleTimeoutId);
+                    speechBubbleTimeoutId = null;
+                }
+                if (bubbleResetTimeoutId) { // Auch den neuen Timeout löschen
+                    clearTimeout(bubbleResetTimeoutId);
+                    bubbleResetTimeoutId = null;
+                }
+                
+                jannikSpeechBubble.style.transition = originalBubbleTransition; // Ursprüngliche Transition wiederherstellen
+                jannikSpeechBubble.offsetHeight; // Reflow erzwingen
+                jannikSpeechBubble.classList.remove('active'); // CSS Klasse entfernen, um opacity zu steuern
+                jannikSpeechBubble.style.opacity = ''; // Opacity zurücksetzen (wird durch CSS active Klasse gesteuert)
+                jannikSpeechBubble.style.pointerEvents = ''; // Pointer Events zurücksetzen
+
+                jannikSpeechBubble.textContent = "Ich bin der Jannik";
+
+                adjustHeadSectionHeight();
+            };
+
+            updateScaleDisplay();
+            checkGameConditions();
+            addGameEventListeners();
+            adjustHeadSectionHeight();
+
+            window.addEventListener('resize', () => {
+                adjustHeadSectionHeight();
+                screens.forEach(screen => {
+                    if (screen.classList.contains('active')) {
+                        const screenImg = screen.querySelector('img');
+                        showScreen(screen.id, screenTextElement.textContent, screenImg ? screenImg.src : '');
+                    }
+                });
+            });
+
+
+            function addGameEventListeners() {
+                items.forEach(item => {
+                    item.removeEventListener('dragstart', handleDragStart);
+                    item.removeEventListener('dragend', handleDragEnd);
+                    item.removeEventListener('touchstart', handleTouchStart);
+                    item.removeEventListener('touchmove', handleTouchMove);
+                    item.removeEventListener('touchend', handleTouchEnd);
+                    item.removeEventListener('touchcancel', handleTouchEnd);
+
+                    item.addEventListener('dragstart', handleDragStart);
+                    item.addEventListener('dragend', handleDragEnd);
+                    item.addEventListener('touchstart', handleTouchStart, { passive: false });
+                    item.addEventListener('touchmove', handleTouchMove, { passive: false });
+                    item.addEventListener('touchend', handleTouchEnd);
+                    item.addEventListener('touchcancel', handleTouchEnd);
+                });
+
+                headTarget.removeEventListener('dragover', handleDragOver);
+                headTarget.removeEventListener('dragleave', handleDragLeave);
+                headTarget.removeEventListener('drop', handleDrop);
+
+                headTarget.addEventListener('dragover', handleDragOver);
+                headTarget.addEventListener('dragleave', handleDragLeave);
+                headTarget.addEventListener('drop', handleDrop);
+            }
+
+            function removeGameEventListeners() {
+                 items.forEach(item => {
+                    item.removeEventListener('dragstart', handleDragStart);
+                    item.removeEventListener('dragend', handleDragEnd);
+                    item.removeEventListener('touchstart', handleTouchStart);
+                    item.removeEventListener('touchmove', handleTouchMove);
+                    item.removeEventListener('touchend', handleTouchEnd);
+                    item.removeEventListener('touchcancel', handleTouchEnd);
+                    item.classList.add('disabled');
+                });
+                headTarget.removeEventListener('dragover', handleDragOver);
+                headTarget.removeEventListener('dragleave', handleDragLeave);
+                headTarget.classList.remove('drag-over');
+                headTarget.removeEventListener('drop', handleDrop);
+            }
+
+
+            function updateScaleDisplay() {
+                for (const key in scales) {
+                    const fillElement = document.getElementById(`${key}-fill`);
+                    if (fillElement) {
+                        const percentage = ((scales[key] - minScale) / (maxScale - minScale)) * 100;
+                        fillElement.style.width = `${percentage}%`;
+                        fillElement.classList.toggle('negative', scales[key] < 0);
+                        fillElement.classList.toggle('zero', scales[key] === 0);
+                        if (scales[key] === 0) {
+                            fillElement.classList.remove('negative');
+                        }
+                    }
+                }
+            }
+
+            function checkGameConditions() {
+                let gameOver = false;
+                let winner = false;
+                let winnerScreenId = null;
+                let gameOverScreenId = null;
+                let screenText = '';
+                let screenImgSrc = '';
+
+                for (const key of ['herzhaft', 'suesses', 'vitamine', 'trinken']) {
+                    if (scales[key] <= minScale) {
+                        gameOver = true;
+                        gameOverScreenId = 'gameOver2';
+                        screenText = 'DU BIST KEIN JANNIK';
+                        screenImgSrc = 'GO2.png'; // Aktualisiert
+                        break;
+                    }
+                    if (scales[key] >= maxScale) {
+                        winner = true;
+                        winnerScreenId = 'winner1';
+                        screenText = 'ICH BIN DER JANNIK';
+                        screenImgSrc = 'SB2.png'; // Aktualisiert
+                        break;
+                    }
+                }
+
+                let medicalItemsActiveTriggered = false;
+                for (const key of ['herzhaft', 'suesses', 'vitamine', 'trinken']) {
+                    if (scales[key] <= triggerScale) {
+                        medicalItemsActiveTriggered = true;
+                        break;
+                    }
+                }
+
+                if (medicalItemsActiveTriggered || medizinActivated) {
+                    testItem.classList.remove('disabled');
+                    medicineItem.classList.remove('disabled');
+                } else {
+                    testItem.classList.add('disabled');
+                    medicineItem.classList.add('disabled');
+                }
+
+                if (!medizinActivated && scales['medizin'] > 0) {
+                     medizinActivated = true;
+                     checkGameConditions();
+                     return;
+                }
+
+                if (medizinActivated) {
+                    if (medizinCombo >= 10 && scales['medizin'] >= maxScale) {
+                        winner = true;
+                        winnerScreenId = 'winner1';
+                        screenText = 'ICH BIN DER JANNIK';
+                        screenImgSrc = 'SB2.png'; // Aktualisiert
+                    }
+                }
+
+                if (drinkCombo >= 10 && scales['trinken'] >= maxScale) {
+                    winner = true;
+                    winnerScreenId = 'winner2';
+                    screenText = 'JANNIK IST GLÜCKLICH';
+                    screenImgSrc = 'SB1.png'; // Aktualisiert
+                }
+
+                if (scales['gameoverTrigger']) {
+                    gameOver = true;
+                    gameOverScreenId = 'gameOver1';
+                    screenText = 'ICH WAR DER JANNIK';
+                    screenImgSrc = 'GO1.png'; // Aktualisiert
+                }
+
+                if (gameOver) {
+                    showScreen(gameOverScreenId, screenText, screenImgSrc);
+                } else if (winner) {
+                    showScreen(winnerScreenId, screenText, screenImgSrc);
+                }
+            }
+
+            function showScreen(screenId, textToShow, screenImgSrc) {
+                const targetScreen = document.getElementById(screenId);
+                const headRect = headTarget.getBoundingClientRect();
+                const targetScreenImage = targetScreen.querySelector('img');
+
+                // Alle existierenden Screen-Aktivierungen zurücksetzen
+                screens.forEach(screen => {
+                    screen.classList.remove('active');
+                    screen.style.top = '';
+                    screen.style.left = '';
+                    screen.style.width = '';
+                    screen.style.height = '';
+                });
+                screenTextElement.classList.remove('active', 'winner2', 'gameover1');
+                screenTextElement.textContent = '';
+
+                body.classList.remove('screen-active');
+
+                // Kopf sofort ausblenden
+                headTarget.style.transition = 'none';
+                headTarget.offsetHeight; // Reflow erzwingen
+                headTarget.classList.add('hidden');
+                setTimeout(() => {
+                    headTarget.style.transition = originalHeadTransition;
+                }, 0);
+
+                // Sprechblase sofort ausblenden und Timeouts löschen
+                if (speechBubbleTimeoutId) {
+                    clearTimeout(speechBubbleTimeoutId);
+                    speechBubbleTimeoutId = null;
+                }
+                if (bubbleResetTimeoutId) {
+                    clearTimeout(bubbleResetTimeoutId);
+                    bubbleResetTimeoutId = null;
+                }
+                
+                jannikSpeechBubble.style.transition = 'none'; // Transition deaktivieren
+                jannikSpeechBubble.offsetHeight; // Reflow erzwingen
+                jannikSpeechBubble.classList.remove('active'); // Klasse entfernen
+                jannikSpeechBubble.style.opacity = '0'; // Sofort transparent machen
+                jannikSpeechBubble.style.pointerEvents = 'none'; // Unklickbar machen
+
+
+                targetScreen.style.left = `${headRect.left}px`;
+                targetScreen.style.top = `${headRect.top}px`;
+                targetScreen.style.width = `${headRect.width}px`;
+                targetScreen.style.height = `${headRect.height}px`;
+                
+                if (targetScreenImage && screenImgSrc) {
+                    targetScreenImage.src = screenImgSrc;
+                }
+
+                targetScreen.classList.add('active');
+                body.classList.add('screen-active');
+
+                screenTextElement.textContent = textToShow;
+                
+                const textTop = headRect.bottom + 10;
+                const textLeft = headRect.left;
+                const textWidth = headRect.width;
+
+                screenTextElement.style.top = `${textTop}px`;
+                screenTextElement.style.left = `${textLeft}px`;
+                screenTextElement.style.width = `${textWidth}px`;
+
+                const minTextFontSize = 8;
+                const maxTextFontSize = 25;
+                
+                let calculatedFontSize = headRect.width / (textToShow.length * 0.4); 
+                calculatedFontSize = Math.max(minTextFontSize, Math.min(maxTextFontSize, calculatedFontSize));
+                screenTextElement.style.fontSize = `${calculatedFontSize}px`;
+
+                screenTextElement.classList.remove('winner2', 'gameover1');
+                if (screenId === 'winner2') {
+                    screenTextElement.classList.add('winner2');
+                } else if (screenId === 'gameOver1') {
+                    screenTextElement.classList.add('gameover1');
+                }
+
+                screenTextElement.classList.add('active');
+
+                removeGameEventListeners();
+
+                // Sprechblase nach 2 Sekunden wieder aktivieren
+                bubbleResetTimeoutId = setTimeout(() => {
+                    if (!scales['gameoverTrigger'] && !isAnyWinnerScreenActive()) { // Nur zurücksetzen, wenn Spiel nicht im Endzustand ist
+                        jannikSpeechBubble.style.transition = originalBubbleTransition; // Original Transition wiederherstellen
+                        jannikSpeechBubble.offsetHeight; // Reflow erzwingen
+                        jannikSpeechBubble.style.opacity = ''; // Opacity wird wieder vom CSS gesteuert
+                        jannikSpeechBubble.style.pointerEvents = ''; // Klickbar machen
+                        jannikSpeechBubble.classList.remove('active'); // Eventuell noch vorhandene "active" entfernen
+
+                        // Den Standardtext wiederherstellen, wenn kein spezieller Screen aktiv ist
+                        if (!targetScreen.classList.contains('active')) {
+                            jannikSpeechBubble.textContent = "Ich bin der Jannik";
+                        }
+                    }
+                }, screenActiveBubbleDelay);
+            }
+
+            function isAnyWinnerScreenActive() {
+                return document.getElementById('winner1').classList.contains('active') ||
+                       document.getElementById('winner2').classList.contains('active');
+            }
+
+
+            // --- HTML5 Drag and Drop Functions ---
+            let draggedItem = null;
+
+            function handleDragStart(e) {
+                if (this.draggable === true && !this.classList.contains('disabled')) {
+                    draggedItem = this;
+                    e.dataTransfer.setData('text/plain', this.id);
+                    e.dataTransfer.effectAllowed = 'move';
+
+                    const dragImage = this.cloneNode(true);
+                    dragImage.id = 'custom-drag-image';
+                    dragImage.style.position = 'absolute';
+                    dragImage.style.left = '-9999px';
+                    dragImage.style.top = '-9999px';
+                    dragImage.style.transform = 'scale(3)';
+                    dragImage.style.pointerEvents = 'none';
+                    dragImage.style.zIndex = '9999';
+                    dragImage.style.boxShadow = 'none';
+                    document.body.appendChild(dragImage);
+
+                    e.dataTransfer.setDragImage(dragImage, e.clientX - this.getBoundingClientRect().left, e.clientY - this.getBoundingClientRect().top);
+
+                    this.classList.add('is-dragging');
+                } else {
+                    e.preventDefault();
+                }
+            }
+
+            function handleDragEnd(e) {
+                if (draggedItem) {
+                    draggedItem.classList.remove('is-dragging');
+                }
+                const customDragImage = document.getElementById('custom-drag-image');
+                if (customDragImage) {
+                    customDragImage.remove();
+                }
+                draggedItem = null;
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                if (draggedItem) {
+                    e.dataTransfer.dropEffect = 'move';
+                    headTarget.classList.add('drag-over');
+                }
+            }
+
+            function handleDragLeave() {
+                headTarget.classList.remove('drag-over');
+            }
+
+            function handleDrop(e) {
+                e.preventDefault();
+                headTarget.classList.remove('drag-over');
+
+                if (draggedItem) {
+                    processDroppedItem(draggedItem);
+                }
+                draggedItem = null;
+            }
+
+            // --- Touch-based Drag ---
+            let touchDraggedItem = null;
+            let itemOffsetX, itemOffsetY;
+            let ghostElement = null;
+
+            function handleTouchStart(e) {
+                if (e.touches.length === 1 && !this.classList.contains('disabled')) {
+                    e.preventDefault();
+                    touchDraggedItem = this;
+
+                    touchDraggedItem.classList.add('is-dragging');
+
+                    const touch = e.touches[0];
+                    const rect = touchDraggedItem.getBoundingClientRect();
+                    itemOffsetX = touch.clientX - rect.left;
+                    itemOffsetY = touch.clientY - rect.top;
+
+                    ghostElement = touchDraggedItem.cloneNode(true);
+                    ghostElement.id = 'ghost-drag-item';
+                    ghostElement.classList.add('ghost-item');
+                    ghostElement.classList.remove('is-dragging');
+                    ghostElement.style.position = 'absolute';
+                    ghostElement.style.zIndex = '9999';
+                    ghostElement.style.width = rect.width + 'px';
+                    ghostElement.style.height = rect.height + 'px';
+
+                    ghostElement.style.left = (touch.clientX - itemOffsetX) + 'px';
+                    ghostElement.style.top = (touch.clientY - itemOffsetY) + 'px';
+
+                    document.body.appendChild(ghostElement);
+                }
+            }
+
+            function handleTouchMove(e) {
+                if (touchDraggedItem && ghostElement) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+
+                    ghostElement.style.left = (touch.clientX - itemOffsetX) + 'px';
+                    ghostElement.style.top = (touch.clientY - itemOffsetY) + 'px';
+
+                    const headRect = headTarget.getBoundingClientRect();
+                    const touchX = touch.clientX;
+                    const touchY = touch.clientY;
+
+                    if (touchX >= headRect.left && touchX <= headRect.right &&
+                        touchY >= headRect.top && touchY <= headRect.bottom) {
+                        headTarget.classList.add('drag-over');
+                    } else {
+                        headTarget.classList.remove('drag-over');
+                    }
+                }
+            }
+
+            function handleTouchEnd(e) {
+                if (touchDraggedItem) {
+                    touchDraggedItem.classList.remove('is-dragging');
+
+                    if (ghostElement) {
+                        document.body.removeChild(ghostElement);
+                        ghostElement = null;
+                    }
+
+                    const headRect = headTarget.getBoundingClientRect();
+                    const lastTouch = e.changedTouches[0];
+                    const touchX = lastTouch.clientX;
+                    const touchY = lastTouch.clientY;
+
+                    headTarget.classList.remove('drag-over');
+
+                    if (touchX >= headRect.left && touchX <= headRect.right &&
+                        touchY >= headRect.top && touchY <= headRect.bottom) {
+                        processDroppedItem(touchDraggedItem);
+                    }
+                    touchDraggedItem = null;
+                }
+            }
+
+            function showJannikSpeechBubble(message) {
+                if (speechBubbleTimeoutId) {
+                    clearTimeout(speechBubbleTimeoutId);
+                    speechBubbleTimeoutId = null;
+                }
+                
+                // Sicherstellen, dass die Sprechblase ihre Transition wieder hat
+                jannikSpeechBubble.style.transition = originalBubbleTransition; 
+                jannikSpeechBubble.offsetHeight; // Reflow erzwingen
+                
+                jannikSpeechBubble.textContent = message;
+                jannikSpeechBubble.classList.add('active'); // Setzt Opacity auf 1
+                jannikSpeechBubble.style.pointerEvents = 'auto'; // Klickbar machen
+
+                speechBubbleTimeoutId = setTimeout(() => {
+                    jannikSpeechBubble.classList.remove('active'); // Setzt Opacity auf 0 (durch CSS)
+                    const transitionDurationMs = parseFloat(window.getComputedStyle(jannikSpeechBubble).transitionDuration) * 1000;
+                    setTimeout(() => {
+                        jannikSpeechBubble.style.pointerEvents = 'none'; // Nach Transition unklickbar
+                    }, transitionDurationMs);
+                    speechBubbleTimeoutId = null;
+                }, bubbleDuration);
+            }
+
+
+            function processDroppedItem(item) {
+                const effect = JSON.parse(item.dataset.effect);
+                const currentItemType = item.dataset.type;
+                const itemEmoji = item.textContent.trim();
+
+                if (scales['gameoverTrigger'] && currentItemType !== 'special') {
+                    scales['gameoverTrigger'] = false;
+                }
+
+                let showDislikeMessage = false;
+                let showJannikMessage = false;
+
+                if (effect.gameover) {
+                    scales['gameoverTrigger'] = true;
+                } else {
+                    for (const key in effect) {
+                        const oldValue = scales[key];
+                        scales[key] += effect[key];
+                        scales[key] = Math.max(minScale, Math.min(maxScale, scales[key]));
+
+                        if (key !== 'medizin' && effect[key] < 0 && scales[key] < oldValue) {
+                            showDislikeMessage = true;
+                        }
+                    }
+                }
+
+                if (currentItemType === 'drink' && effect.trinken === 1) {
+                    if (lastActivatedItemType === currentItemType) {
+                        drinkCombo++;
+                    } else {
+                        drinkCombo = 1;
+                    }
+                    if (itemEmoji === '🍺' && effect.trinken > 0) {
+                        showJannikMessage = true;
+                    }
+                } else {
+                    drinkCombo = 0;
+                }
+
+                if (currentItemType === 'medicine' && effect.medizin === 1) {
+                    if (lastActivatedItemType === currentItemType) {
+                        medizinCombo++;
+                    } else {
+                        medizinCombo = 1;
+                    }
+                } else {
+                    if (medizinActivated && currentItemType !== 'medicine') {
+                        medizinCombo = 0;
+                    }
+                }
+
+                lastActivatedItemType = currentItemType;
+
+                updateScaleDisplay();
+                checkGameConditions();
+
+                // Nur eine Sprechblase anzeigen, wenn kein Screen aktiv ist
+                if (!document.querySelector('.screen.active')) {
+                    if (scales['gameoverTrigger']) {
+                        // Handled by showScreen() - wird hier nicht nochmal getriggert, da bereits in checkGameConditions
+                    } else if (showDislikeMessage) {
+                        showJannikSpeechBubble("Jannik mag das nicht");
+                    } else if (showJannikMessage) {
+                        showJannikSpeechBubble("ICH BIN DER JANNIK");
+                    } else {
+                        showJannikSpeechBubble("Ich bin der Jannik");
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
